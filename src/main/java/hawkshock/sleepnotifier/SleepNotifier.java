@@ -77,7 +77,7 @@ public class SleepNotifier implements ModInitializer {
 		boolean canSleepNow = thundering || naturalNight;
 		boolean previous = priorCanSleep.getOrDefault(world.getRegistryKey(), false);
 
-		// Dynamic warning start based on config
+		// Dynamic lead time
 		int lead = Math.max(0, ensureConfig().morningWarningLeadTicks);
 		long warningStartTick = Math.max(NIGHT_START, NIGHT_END - lead);
 
@@ -86,13 +86,20 @@ public class SleepNotifier implements ModInitializer {
 			oneMinuteWarned.put(world.getRegistryKey(), false);
 		}
 
+		// Avoid per-tick logging spam when no players meet threshold:
+		// We mark oneMinuteWarned true regardless of success so failure logs occur only once.
 		if (naturalNight && !thundering && canSleepNow
 				&& lead > 0
 				&& dayTime >= warningStartTick && dayTime < NIGHT_END
 				&& !oneMinuteWarned.getOrDefault(world.getRegistryKey(), false)) {
-			if (sendOneMinuteLeft(world)) {
-				oneMinuteWarned.put(world.getRegistryKey(), true);
-			}
+
+			boolean success = sendOneMinuteLeft(world);
+			// If success or failure, mark warned to suppress repeated attempts/logs.
+			oneMinuteWarned.put(world.getRegistryKey(), true);
+
+			// Optional: if you want a second attempt when a player crosses the threshold later,
+			// replace the line above with:
+			// if (success) oneMinuteWarned.put(world.getRegistryKey(), true);
 		}
 
 		if (!canSleepNow && previous) {
@@ -105,6 +112,7 @@ public class SleepNotifier implements ModInitializer {
 	private void sendNightStart(ServerWorld world) {
 		ServerPlayerEntity triggering = findTriggering(world);
 		if (triggering == null) {
+			// This logs only once at night start (no spam).
 			LOGGER.info("Night start: no players met rest threshold (>= {}).", REST_THRESHOLD_TICKS);
 			return;
 		}
@@ -118,6 +126,7 @@ public class SleepNotifier implements ModInitializer {
 	private boolean sendOneMinuteLeft(ServerWorld world) {
 		ServerPlayerEntity triggering = findTriggering(world);
 		if (triggering == null) {
+			// Previously spammed every tick; now will run only once due to logic above.
 			LOGGER.info("Morning warning skipped: no players meet rest threshold (>= {}).", REST_THRESHOLD_TICKS);
 			return false;
 		}
