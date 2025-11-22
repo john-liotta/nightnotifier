@@ -25,6 +25,9 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Adds Nether / End dimension toggles.
+ */
 public class SleepNotifier implements ModInitializer {
 	public static final String MOD_ID = "sleepnotifier";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
@@ -45,12 +48,10 @@ public class SleepNotifier implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("[SleepNotifier] Server init start");
 		ensureConfig();
 		resolvePhantomSounds();
 		OverlayMessagePayload.registerTypeSafely();
 		ServerTickEvents.START_WORLD_TICK.register(this::onWorldTick);
-		LOGGER.info("[SleepNotifier] Server init complete");
 	}
 
 	private void resolvePhantomSounds() {
@@ -68,8 +69,16 @@ public class SleepNotifier implements ModInitializer {
 		return CONFIG;
 	}
 
+	private boolean dimensionEnabled(ServerWorld world) {
+		RegistryKey<World> key = world.getRegistryKey();
+		if (key.equals(World.OVERWORLD)) return true; // always enabled in overworld
+		if (key.equals(World.NETHER) && CONFIG.enableNetherNotifications) return true;
+		if (key.equals(World.END) && CONFIG.enableEndNotifications) return true;
+		return false;
+	}
+
 	private void onWorldTick(ServerWorld world) {
-		if (!world.getRegistryKey().equals(World.OVERWORLD)) return;
+		if (!dimensionEnabled(world)) return;
 
 		long dayTime = world.getTimeOfDay() % 24000L;
 		boolean thundering = world.isThundering();
@@ -77,7 +86,6 @@ public class SleepNotifier implements ModInitializer {
 		boolean canSleepNow = thundering || naturalNight;
 		boolean previous = priorCanSleep.getOrDefault(world.getRegistryKey(), false);
 
-		// Dynamic lead time
 		int lead = Math.max(0, ensureConfig().morningWarningLeadTicks);
 		long warningStartTick = Math.max(NIGHT_START, NIGHT_END - lead);
 
@@ -86,20 +94,13 @@ public class SleepNotifier implements ModInitializer {
 			oneMinuteWarned.put(world.getRegistryKey(), false);
 		}
 
-		// Avoid per-tick logging spam when no players meet threshold:
-		// We mark oneMinuteWarned true regardless of success so failure logs occur only once.
 		if (naturalNight && !thundering && canSleepNow
 				&& lead > 0
 				&& dayTime >= warningStartTick && dayTime < NIGHT_END
 				&& !oneMinuteWarned.getOrDefault(world.getRegistryKey(), false)) {
 
 			boolean success = sendOneMinuteLeft(world);
-			// If success or failure, mark warned to suppress repeated attempts/logs.
-			oneMinuteWarned.put(world.getRegistryKey(), true);
-
-			// Optional: if you want a second attempt when a player crosses the threshold later,
-			// replace the line above with:
-			// if (success) oneMinuteWarned.put(world.getRegistryKey(), true);
+			oneMinuteWarned.put(world.getRegistryKey(), true); // suppress repeats regardless
 		}
 
 		if (!canSleepNow && previous) {
@@ -112,8 +113,7 @@ public class SleepNotifier implements ModInitializer {
 	private void sendNightStart(ServerWorld world) {
 		ServerPlayerEntity triggering = findTriggering(world);
 		if (triggering == null) {
-			// This logs only once at night start (no spam).
-			LOGGER.info("Night start: no players met rest threshold (>= {}).", REST_THRESHOLD_TICKS);
+			LOGGER.debug("Night start: no player meets threshold (>= {}) in {}", REST_THRESHOLD_TICKS, world.getRegistryKey().getValue());
 			return;
 		}
 		int ticks = triggering.getStatHandler().getStat(Stats.CUSTOM.getOrCreateStat(Stats.TIME_SINCE_REST));
@@ -126,8 +126,7 @@ public class SleepNotifier implements ModInitializer {
 	private boolean sendOneMinuteLeft(ServerWorld world) {
 		ServerPlayerEntity triggering = findTriggering(world);
 		if (triggering == null) {
-			// Previously spammed every tick; now will run only once due to logic above.
-			LOGGER.info("Morning warning skipped: no players meet rest threshold (>= {}).", REST_THRESHOLD_TICKS);
+			LOGGER.debug("Morning warning skipped: no player meets threshold (>= {}) in {}", REST_THRESHOLD_TICKS, world.getRegistryKey().getValue());
 			return false;
 		}
 		int ticks = triggering.getStatHandler().getStat(Stats.CUSTOM.getOrCreateStat(Stats.TIME_SINCE_REST));
@@ -173,7 +172,8 @@ public class SleepNotifier implements ModInitializer {
 
 		SoundEvent chosen = null;
 		float serverVolume = 1.0f;
-		if (cfg.enablePhantomScreams) {
+		// Restrict server phantom sounds to Overworld only (they don't spawn elsewhere)
+		if (cfg.enablePhantomScreams && world.getRegistryKey().equals(World.OVERWORLD)) {
 			if (nightStart) {
 				chosen = phantomScream != null ? phantomScream : phantomFallbackNight;
 				serverVolume = Math.max(0f, cfg.nightScreamVolume);
@@ -187,14 +187,12 @@ public class SleepNotifier implements ModInitializer {
 			boolean modded = ServerPlayNetworking.canSend(player, OverlayMessagePayload.ID);
 
 			if (!modded && chosen != null && serverVolume > 0f) {
-				world.playSound(
-						null,
+				world.playSound(null,
 						player.getBlockPos(),
 						chosen,
 						SoundCategory.HOSTILE,
 						serverVolume,
-						1.0f
-				);
+						1.0f);
 			}
 
 			if (modded) {

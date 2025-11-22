@@ -1,4 +1,4 @@
-package hawkshock.sleepnotifier.network;
+package hawkshock.nightnotifier.network;
 
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.network.RegistryByteBuf;
@@ -14,7 +14,7 @@ import net.minecraft.util.Identifier;
 public record OverlayMessagePayload(String message, int duration, String eventType) implements CustomPayload {
 
 	public static final Id<OverlayMessagePayload> ID =
-			new CustomPayload.Id<>(Identifier.of("sleepnotifier", "overlay_msg"));
+			new CustomPayload.Id<>(Identifier.of("nightnotifier", "overlay_msg"));
 
 	public static final PacketCodec<RegistryByteBuf, OverlayMessagePayload> CODEC =
 			PacketCodec.tuple(

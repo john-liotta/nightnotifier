@@ -1,7 +1,7 @@
-package hawkshock.sleepnotifier;
+package hawkshock.nightnotifier;
 
-import hawkshock.sleepnotifier.config.ClientDisplayConfig;
-import hawkshock.sleepnotifier.network.OverlayMessagePayload;
+import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.nightnotifier.network.OverlayMessagePayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -14,6 +14,9 @@ import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -21,12 +24,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 
-public class SleepNotifierClient implements ClientModInitializer {
+public class NightNotifierClient implements ClientModInitializer {
+
+	private static final Logger LOG = LoggerFactory.getLogger("NightNotifierClient");
 
 	private static ClientDisplayConfig CONFIG;
 	private static Instant lastConfigTimestamp = Instant.EPOCH;
 
-	// Phantom sound cache (client side)
 	private static SoundEvent phantomScream;
 	private static SoundEvent phantomFallbackNight;
 	private static SoundEvent phantomFallbackWarn;
@@ -50,6 +54,14 @@ public class SleepNotifierClient implements ClientModInitializer {
 
 		static void set(String msg, int serverDuration, String eventType) {
 			if (!CONFIG.enableNotifications) return;
+
+			// Dimension filtering (client preference)
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.world != null) {
+				if (mc.world.getRegistryKey() == World.NETHER && !CONFIG.showNetherNotifications) return;
+				if (mc.world.getRegistryKey() == World.END && !CONFIG.showEndNotifications) return;
+			}
+
 			message = Text.literal(msg);
 			int chosen = (CONFIG.defaultDuration > 0) ? CONFIG.defaultDuration : serverDuration;
 			ticksRemaining = Math.max(10, chosen > 0 ? chosen : 300);
@@ -98,7 +110,6 @@ public class SleepNotifierClient implements ClientModInitializer {
 			if (vol > 3f) vol = 3f;
 
 			if (chosen != null && vol > 0f) {
-				// Correct world playSound signature: world.playSound(entity, x, y, z, sound, category, volume, pitch)
 				client.world.playSound(
 						client.player,
 						client.player.getX(),
@@ -220,7 +231,8 @@ public class SleepNotifierClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
-		reloadConfig();
+		LOG.info("[Night Notifier] Client init");
+		ClientDisplayConfig.load();
 		OverlayMessagePayload.registerTypeSafely();
 
 		ClientPlayNetworking.registerGlobalReceiver(OverlayMessagePayload.ID, (payload, context) ->
@@ -261,7 +273,7 @@ public class SleepNotifierClient implements ClientModInitializer {
 	}
 
 	private static void checkExternalConfigModification() {
-		Path p = Paths.get("config", "sleepnotifier_client.json");
+		Path p = Paths.get("config", "nightnotifier_client.json");
 		if (!Files.exists(p)) return;
 		Instant ts = getConfigFileTimestamp();
 		if (ts.isAfter(lastConfigTimestamp)) {
@@ -271,7 +283,7 @@ public class SleepNotifierClient implements ClientModInitializer {
 
 	private static Instant getConfigFileTimestamp() {
 		try {
-			return Files.getLastModifiedTime(Paths.get("config", "sleepnotifier_client.json")).toInstant();
+			return Files.getLastModifiedTime(Paths.get("config", "nightnotifier_client.json")).toInstant();
 		} catch (Exception e) {
 			return Instant.EPOCH;
 		}

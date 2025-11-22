@@ -1,8 +1,8 @@
 {
 	"schemaVersion": 1,
-	"id": "sleepnotifier",
+	"id": "nightnotifier",
 	"version": "1.0.0",
-	"name": "Sleep Notifier",
+	"name": "Night Notifier",
 	"description": "Sleep status notifications with overlay and phantom warnings.",
 	"authors": [
 		"hawkshock"
@@ -10,13 +10,13 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"hawkshock.sleepnotifier.SleepNotifier"
+			"hawkshock.nightnotifier.NightNotifier"
 		],
 		"client": [
-			"hawkshock.sleepnotifier.SleepNotifierClient"
+			"hawkshock.nightnotifier.NightNotifierClient"
 		],
 		"modmenu": [
-			"hawkshock.sleepnotifier.client.ModMenuIntegration"
+			"hawkshock.nightnotifier.client.ModMenuIntegration"
 		]
 	},
 	"depends": {

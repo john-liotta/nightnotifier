@@ -1,6 +1,6 @@
 {
 	"required": false,
-	"package": "hawkshock.sleepnotifier.mixin.client",
+	"package": "hawkshock.nightnotifier.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ExampleClientMixin"
