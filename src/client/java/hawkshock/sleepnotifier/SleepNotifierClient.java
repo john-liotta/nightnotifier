@@ -8,74 +8,107 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.registry.Registries;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
 
 public class SleepNotifierClient implements ClientModInitializer {
 
 	private static ClientDisplayConfig CONFIG;
+	private static Instant lastConfigTimestamp = Instant.EPOCH;
+
+	// Phantom sound cache (client side)
+	private static SoundEvent phantomScream;
+	private static SoundEvent phantomFallbackNight;
+	private static SoundEvent phantomFallbackWarn;
+	private static boolean soundsResolved = false;
+
+	private static void resolveClientPhantomSounds() {
+		if (soundsResolved) return;
+		phantomScream = Registries.SOUND_EVENT.get(Identifier.of("minecraft","entity.phantom.scream"));
+		if (phantomScream == SoundEvents.INTENTIONALLY_EMPTY) phantomScream = null;
+		phantomFallbackNight = SoundEvents.ENTITY_PHANTOM_AMBIENT;
+		phantomFallbackWarn  = SoundEvents.ENTITY_PHANTOM_SWOOP;
+		soundsResolved = true;
+	}
 
 	private static class OverlayMessage {
 		private static Text message = null;
 		private static int ticksRemaining = 0;
-		private static int color = 0xFFFFA000;
+		private static int color = 0xFFFFFFFF;
 		private static float scale = 1.0f;
-
-		// Client-side sound cache
-		private static SoundEvent phantomScream;
-		private static SoundEvent phantomFallbackNight;
-		private static SoundEvent phantomFallbackWarn;
-		private static boolean soundsResolved = false;
+		private static boolean styled = true;
 
 		static void set(String msg, int serverDuration, String eventType) {
-			if (!CONFIG.enableOverlay) return;
+			if (!CONFIG.enableNotifications) return;
 			message = Text.literal(msg);
 			int chosen = (CONFIG.defaultDuration > 0) ? CONFIG.defaultDuration : serverDuration;
 			ticksRemaining = Math.max(10, chosen > 0 ? chosen : 300);
-			color = parseColor(CONFIG.colorHex);
-			scale = CONFIG.textScale > 0 ? CONFIG.textScale : 1.0f;
-
-			// Client plays sound locally based on its own config (trumps server).
+			applyCurrentStyle();
 			if (CONFIG.enablePhantomScreams) {
 				playClientSound(eventType);
 			}
 		}
 
-		private static void resolveSoundsIfNeeded() {
-			if (soundsResolved) return;
-			var id = Identifier.of("minecraft", "entity.phantom.scream");
-			phantomScream = Registries.SOUND_EVENT.get(id);
-			if (phantomScream == SoundEvents.INTENTIONALLY_EMPTY) phantomScream = null;
-			phantomFallbackNight = SoundEvents.ENTITY_PHANTOM_AMBIENT;
-			phantomFallbackWarn  = SoundEvents.ENTITY_PHANTOM_SWOOP;
-			soundsResolved = true;
+		static void applyCurrentStyle() {
+			if (message == null) return;
+			if (!CONFIG.enableNotifications) {
+				message = null;
+				ticksRemaining = 0;
+				return;
+			}
+			styled = CONFIG.useClientStyle;
+			if (styled) {
+				color = parseColor(CONFIG.colorHex);
+				float ts = CONFIG.textScale;
+				if (ts < 0.5f) ts = 0.5f;
+				if (ts > 2.5f) ts = 2.5f;
+				scale = ts;
+			} else {
+				color = 0xFFFFFFFF;
+				scale = 1.0f;
+			}
 		}
 
 		private static void playClientSound(String eventType) {
-			resolveSoundsIfNeeded();
-			var client = MinecraftClient.getInstance();
+			resolveClientPhantomSounds();
+			MinecraftClient client = MinecraftClient.getInstance();
 			if (client == null || client.player == null) return;
-
-			boolean nightStart = "NIGHT_START".equals(eventType);
-			boolean sunriseImminent = "SUNRISE_IMMINENT".equals(eventType);
-
 			SoundEvent chosen = null;
-			float vol = 1.0f;
-			if (nightStart) {
+			float vol = 0f;
+
+			if ("NIGHT_START".equals(eventType)) {
 				chosen = phantomScream != null ? phantomScream : phantomFallbackNight;
-				vol = Math.max(0f, CONFIG.nightScreamVolume);
-			} else if (sunriseImminent) {
+				vol = CONFIG.nightScreamVolume;
+			} else if ("SUNRISE_IMMINENT".equals(eventType)) {
 				chosen = phantomScream != null ? phantomScream : phantomFallbackWarn;
-				vol = Math.max(0f, CONFIG.morningScreamVolume);
+				vol = CONFIG.morningScreamVolume;
 			}
+
+			if (vol < 0f) vol = 0f;
+			if (vol > 3f) vol = 3f;
+
 			if (chosen != null && vol > 0f) {
-				// Client-side playback at player's position
-				client.player.playSound(chosen, vol, 1.0f);
+				// Correct world playSound signature: world.playSound(entity, x, y, z, sound, category, volume, pitch)
+				client.world.playSound(
+						client.player,
+						client.player.getX(),
+						client.player.getY(),
+						client.player.getZ(),
+						chosen,
+						SoundCategory.HOSTILE,
+						vol,
+						1.0f
+				);
 			}
 		}
 
@@ -112,24 +145,18 @@ public class SleepNotifierClient implements ClientModInitializer {
 			anchorX += CONFIG.offsetX;
 			anchorY += CONFIG.offsetY;
 
-			int drawXScaled = switch (CONFIG.textAlign.toUpperCase()) {
-				case "LEFT" -> anchorX;
-				case "RIGHT" -> anchorX; // single line fills box; right aligns to anchorX
-				default -> anchorX;      // center collapses to anchorX for single line
-			};
-			int drawYScaled = anchorY;
+			int padX = styled ? 6 : 0;
+			int padY = styled ? 4 : 0;
+			int bgColor = styled ? 0x90000000 : 0x00000000;
 
-			int padX = 6;
-			int padY = 4;
-			int bgColor = 0x90000000;
-
-			if (scale != 1.0f && tryScaleDraw(ctx, tr, message, drawXScaled, drawYScaled, tw, th, padX, padY, bgColor, color, scale)) {
+			if (scale != 1.0f && tryScaleDraw(ctx, tr, message, anchorX, anchorY, tw, th, padX, padY, bgColor, color, scale)) {
 				return;
 			}
 
-			ctx.fill(drawXScaled - padX, drawYScaled - padY,
-					drawXScaled + tw + padX, drawYScaled + th + padY, bgColor);
-			ctx.drawTextWithShadow(tr, message, drawXScaled, drawYScaled, color);
+			if (styled && bgColor != 0) {
+				ctx.fill(anchorX - padX, anchorY - padY, anchorX + tw + padX, anchorY + th + padY, bgColor);
+			}
+			ctx.drawTextWithShadow(tr, message, anchorX, anchorY, color);
 		}
 
 		private static boolean tryScaleDraw(DrawContext ctx,
@@ -155,7 +182,9 @@ public class SleepNotifierClient implements ClientModInitializer {
 				push.invoke(stack);
 				translateM.invoke(stack, (float) topLeftX, (float) topLeftY);
 				scaleM.invoke(stack, s, s);
-				ctx.fill(-padX, -padY, unscaledW + padX, unscaledH + padY, bgColor);
+				if (styled && bgColor != 0) {
+					ctx.fill(-padX, -padY, unscaledW + padX, unscaledH + padY, bgColor);
+				}
 				ctx.drawTextWithShadow(tr, msg.asOrderedText(), 0, 0, textColor);
 				pop.invoke(stack);
 				return true;
@@ -171,48 +200,80 @@ public class SleepNotifierClient implements ClientModInitializer {
 					if (m.getName().equals(n)) return m;
 			return null;
 		}
-
 		private static Method findScale(Class<?> c) {
 			for (Method m : c.getMethods())
 				if (m.getName().equals("scale") && m.getParameterCount() == 2
-					&& m.getParameterTypes()[0] == float.class
-					&& m.getParameterTypes()[1] == float.class)
-				 return m;
+						&& m.getParameterTypes()[0] == float.class
+						&& m.getParameterTypes()[1] == float.class)
+					return m;
 			return null;
 		}
-
 		private static Method findTranslate(Class<?> c) {
 			for (Method m : c.getMethods())
 				if (m.getName().equals("translate") && m.getParameterCount() == 2
-					&& m.getParameterTypes()[0] == float.class
-					&& m.getParameterTypes()[1] == float.class)
-				 return m;
+						&& m.getParameterTypes()[0] == float.class
+						&& m.getParameterTypes()[1] == float.class)
+					return m;
 			return null;
 		}
 	}
 
 	@Override
 	public void onInitializeClient() {
-		CONFIG = ClientDisplayConfig.load();
+		reloadConfig();
 		OverlayMessagePayload.registerTypeSafely();
+
 		ClientPlayNetworking.registerGlobalReceiver(OverlayMessagePayload.ID, (payload, context) ->
-				context.client().execute(() ->
-						OverlayMessage.set(payload.message(), payload.duration(), payload.eventType()))
+				context.client().execute(() -> OverlayMessage.set(payload.message(), payload.duration(), payload.eventType()))
 		);
+
 		HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
+			checkExternalConfigModification();
 			OverlayMessage.render(drawContext);
 			OverlayMessage.tick();
 		});
 	}
 
 	private static int parseColor(String hex) {
-		if (hex == null) return 0xFFFFA000;
+		if (hex == null) return 0xFFFFFFFF;
 		String h = hex.trim();
 		if (h.startsWith("#")) h = h.substring(1);
 		try {
 			if (h.length() == 6) return 0xFF000000 | Integer.parseInt(h, 16);
 			if (h.length() == 8) return (int) Long.parseLong(h, 16);
 		} catch (NumberFormatException ignored) {}
-		return 0xFFFFA000;
+		return 0xFFFFFFFF;
+	}
+
+	public static void applyClientConfig(ClientDisplayConfig updated) {
+		CONFIG = updated;
+		lastConfigTimestamp = Instant.now();
+		OverlayMessage.applyCurrentStyle();
+		if (!CONFIG.enableNotifications) {
+			OverlayMessage.message = null;
+		}
+	}
+
+	public static void reloadConfig() {
+		CONFIG = ClientDisplayConfig.load();
+		lastConfigTimestamp = getConfigFileTimestamp();
+		OverlayMessage.applyCurrentStyle();
+	}
+
+	private static void checkExternalConfigModification() {
+		Path p = Paths.get("config", "sleepnotifier_client.json");
+		if (!Files.exists(p)) return;
+		Instant ts = getConfigFileTimestamp();
+		if (ts.isAfter(lastConfigTimestamp)) {
+			reloadConfig();
+		}
+	}
+
+	private static Instant getConfigFileTimestamp() {
+		try {
+			return Files.getLastModifiedTime(Paths.get("config", "sleepnotifier_client.json")).toInstant();
+		} catch (Exception e) {
+			return Instant.EPOCH;
+		}
 	}
 }

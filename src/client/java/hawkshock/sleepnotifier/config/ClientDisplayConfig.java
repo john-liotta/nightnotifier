@@ -11,29 +11,42 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Client display configuration (V4: adds morningWarningLeadTicks).
+ * Client display configuration (V5).
+ * Migration:
+ *  - Old field enableOverlay -> enableNotifications
+ *  - New field useClientStyle (default true)
  */
 public final class ClientDisplayConfig {
-	public int configVersion = 4;
+	public int configVersion = 5;
 
+	// Master notification toggle (replaces enableOverlay).
+	public boolean enableNotifications = true;
+
+	// Whether to apply client styling (color, scale, box).
+	public boolean useClientStyle = true;
+
+	// Legacy field for migration (may exist in older files).
 	public boolean enableOverlay = true;
 
+	// Positioning
 	public String anchor = "TOP_CENTER";
 	public int offsetX = 0;
 	public int offsetY = 80;
 
+	// Visuals
 	public String colorHex = "#FFFFFF";
 	public float textScale = 1.7f;
 	public String textAlign = "CENTER";
 
+	// Duration override in ticks (>0 overrides server)
 	public int defaultDuration = 300;
 
+	// Phantom sound settings
 	public boolean enablePhantomScreams = true;
 	public float nightScreamVolume = 1.0f;
 	public float morningScreamVolume = 2.0f;
 
-	// Client preferred lead time (ticks) before dawn for warning.
-	// Note: Server timing controls when packet is sent; this value may be used later for client-side overrides.
+	// Morning warning lead time (ticks before sunrise)
 	public int morningWarningLeadTicks = 1200;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -51,10 +64,13 @@ public final class ClientDisplayConfig {
 			save(cfg);
 			return cfg;
 		}
-		if (cfg.configVersion < 4) {
-			cfg.configVersion = 4;
+		// Migration
+		if (cfg.configVersion < 5) {
+			cfg.enableNotifications = cfg.enableOverlay;
+			cfg.useClientStyle = true;
+			cfg.configVersion = 5;
 		}
-		save(cfg);
+		save(cfg); // rewrite with new fields
 		return cfg;
 	}
 
