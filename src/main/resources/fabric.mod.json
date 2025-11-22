@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "sleepnotifier",
+	"version": "1.0.0",
+	"name": "Sleep Notifier",
+	"description": "Sleep status notifications with overlay and phantom warnings.",
+	"authors": [
+		"hawkshock"
+	],
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"hawkshock.sleepnotifier.SleepNotifier"
+		],
+		"client": [
+			"hawkshock.sleepnotifier.SleepNotifierClient"
+		],
+		"modmenu": [
+			"hawkshock.sleepnotifier.client.ModMenuIntegration"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"fabric": "*",
+		"minecraft": "1.21.10",
+		"java": ">=17"
+	},
+	"suggests": {
+		"modmenu": "*"
+	}
+}
