@@ -1,8 +1,8 @@
 package hawkshock.nightnotifier.client.ui;
 
 import hawkshock.nightnotifier.client.ClientHandshake;
+import hawkshock.shared.config.ClientDisplayConfig;
 import hawkshock.nightnotifier.client.sound.SoundManager;
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;

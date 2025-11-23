@@ -1,4 +1,4 @@
-package hawkshock.nightnotifier.config;
+package hawkshock.shared.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -13,6 +13,8 @@ import java.nio.file.Paths;
 /**
  * Client display configuration.
  * Added dimension visibility, offender display preference, and migration (version 9).
+ *
+ * This is a shared copy used while migrating callers to a single canonical config class.
  */
 public final class ClientDisplayConfig {
     public int configVersion = 9;

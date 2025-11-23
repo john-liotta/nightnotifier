@@ -1,10 +1,10 @@
 package hawkshock.nightnotifier;
 
 import hawkshock.nightnotifier.client.ClientHandshake;
+import hawkshock.shared.config.ClientDisplayConfig;
 import hawkshock.nightnotifier.client.config.ConfigWatcher;
 import hawkshock.nightnotifier.client.ui.OverlayManager;
 import hawkshock.nightnotifier.client.ui.ProgressBarRenderer;
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
 import hawkshock.nightnotifier.network.OverlayMessagePayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;

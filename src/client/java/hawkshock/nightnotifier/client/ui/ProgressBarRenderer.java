@@ -1,6 +1,6 @@
 package hawkshock.nightnotifier.client.ui;
 
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.shared.config.ClientDisplayConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
