@@ -1,6 +1,6 @@
 package hawkshock.nightnotifier.client.sound;
 
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.shared.config.ClientDisplayConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundCategory;

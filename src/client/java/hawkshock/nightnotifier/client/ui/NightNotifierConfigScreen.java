@@ -1,7 +1,7 @@
 package hawkshock.nightnotifier.client.ui;
 
 import hawkshock.nightnotifier.NightNotifierClient;
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.shared.config.ClientDisplayConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
