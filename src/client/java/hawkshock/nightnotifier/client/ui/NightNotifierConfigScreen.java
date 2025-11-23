@@ -1,16 +1,18 @@
 package hawkshock.nightnotifier.client.ui;
 
 import hawkshock.nightnotifier.NightNotifierClient;
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.shared.config.ClientDisplayConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CyclingButtonWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.text.Text;
+
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleUnaryOperator;
 
 public class NightNotifierConfigScreen extends Screen {
 
@@ -145,7 +147,14 @@ public class NightNotifierConfigScreen extends Screen {
 		}));
 		yLeft += 24;
 
-		scaleSlider = new ScaleSlider(left, yLeft, w, h, scaleNorm);
+		// Use the extracted ScaleSlider (constructor: x,y,w,h,initial,denormalizer,onApply)
+		scaleSlider = new ScaleSlider(left, yLeft, w, h, scaleNorm,
+				(DoubleUnaryOperator) v -> denormalizeScale((float) v),
+				(DoubleConsumer) v -> {
+					scaleNorm = (float) v;
+					dirty = true;
+					liveApplySliders();
+				});
 		addDrawableChild(scaleSlider);
 		addDrawableChild(resetButton(left + w + 4, yLeft, () -> {
 			scaleNorm = normalizeScale(defaults.textScale);
@@ -153,7 +162,14 @@ public class NightNotifierConfigScreen extends Screen {
 		}));
 		yLeft += 24;
 
-		nightVolSlider = new VolumeSlider(left, yLeft, w, h, Text.literal("Night Vol"), nightVolNorm);
+		// Night volume slider: (x,y,w,h,label,initial,denormalizer,onApply)
+		nightVolSlider = new VolumeSlider(left, yLeft, w, h, "Night Vol", nightVolNorm,
+				(DoubleUnaryOperator) v -> denormalizeVolume((float) v),
+				(DoubleConsumer) v -> {
+					nightVolNorm = (float) v;
+					dirty = true;
+					liveApplySliders();
+				});
 		addDrawableChild(nightVolSlider);
 		addDrawableChild(resetButton(left + w + 4, yLeft, () -> {
 			nightVolNorm = normalizeVolume(defaults.nightScreamVolume);
@@ -161,7 +177,14 @@ public class NightNotifierConfigScreen extends Screen {
 		}));
 		yLeft += 24;
 
-		morningVolSlider = new VolumeSlider(left, yLeft, w, h, Text.literal("Morning Vol"), morningVolNorm);
+		// Morning volume slider
+		morningVolSlider = new VolumeSlider(left, yLeft, w, h, "Morning Vol", morningVolNorm,
+				(DoubleUnaryOperator) v -> denormalizeVolume((float) v),
+				(DoubleConsumer) v -> {
+					morningVolNorm = (float) v;
+					dirty = true;
+					liveApplySliders();
+				});
 		addDrawableChild(morningVolSlider);
 		addDrawableChild(resetButton(left + w + 4, yLeft, () -> {
 			morningVolNorm = normalizeVolume(defaults.morningScreamVolume);
@@ -331,50 +354,4 @@ public class NightNotifierConfigScreen extends Screen {
 
 	@Override public boolean shouldCloseOnEsc() { return true; }
 	@Override public void close() { MinecraftClient.getInstance().setScreen(parent); }
-
-	private class ScaleSlider extends SliderWidget {
-		ScaleSlider(int x, int y, int w, int h, double initial) {
-			super(x, y, w, h, Text.literal("Scale"), initial);
-			updateMessage();
-		}
-		@Override protected void updateMessage() {
-			// Cast value (double) to float for helper
-			setMessage(Text.literal("Scale: " + String.format("%.2f", denormalizeScale((float)this.value))));
-		}
-		@Override protected void applyValue() {
-			scaleNorm = (float)this.value;
-			dirty = true;
-			liveApplySliders();
-			updateMessage();
-		}
-		void force(double v) {
-			this.value = v;
-			applyValue();
-		}
-	}
-
-	private class VolumeSlider extends SliderWidget {
-		VolumeSlider(int x, int y, int w, int h, Text label, double initial) {
-			super(x, y, w, h, label, initial);
-			updateMessage();
-		}
-		@Override protected void updateMessage() {
-			setMessage(Text.literal(getMessage().getString().split(":")[0] + ": " +
-					String.format("%.2f", denormalizeVolume((float)this.value))));
-		}
-		@Override protected void applyValue() {
-			if (getMessage().getString().startsWith("Night")) {
-				nightVolNorm = (float)this.value;
-			} else {
-				morningVolNorm = (float)this.value;
-			}
-			dirty = true;
-			liveApplySliders();
-			updateMessage();
-		}
-		void force(double v) {
-			this.value = v;
-			applyValue();
-		}
-	}
 }
