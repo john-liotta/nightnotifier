@@ -109,6 +109,13 @@ public final class ClothConfigFactory {
                 .setSaveConsumer(p -> apply(cfg, c -> c.textScale = clamp(p / 100f, 0.25f, 2.5f)))
                 .build());
 
+        // Moved: Text Color entry (hex example only)
+        overlay.addEntry(eb.startStrField(Text.literal("Text Color (#RRGGBB)"), cfg.colorHex)
+                .setDefaultValue("#FFFFFF")
+                .setTooltip(Text.literal("Text color in #RRGGBB format"))
+                .setSaveConsumer(v -> apply(cfg, c -> c.colorHex = validateTextColor(v, c.colorHex)))
+                .build());
+
         int notifSeconds = cfg.defaultDuration <= 0 ? cfg.defaultDuration : cfg.defaultDuration / 20;
         overlay.addEntry(eb.startIntField(Text.literal("Message Duration"), notifSeconds)
                 .setDefaultValue(15)
@@ -123,10 +130,11 @@ public final class ClothConfigFactory {
                 .setSaveConsumer(sec -> apply(cfg, c -> c.morningWarningLeadTicks = Math.max(0, sec) * 20))
                 .build());
 
-        overlay.addEntry(eb.startStrField(Text.literal("Color (#RRGGBB or #AARRGGBB)"), cfg.colorHex)
-                .setDefaultValue("#FFFFFF")
-                .setTooltip(Text.literal("Base text color (optionally with alpha)"))
-                .setSaveConsumer(v -> apply(cfg, c -> c.colorHex = validateColor(v, c.colorHex)))
+        // New: client toggle for the progress bar (client choice overrides server)
+        overlay.addEntry(eb.startBooleanToggle(Text.literal("Show Progress Bar"), cfg.enableProgressBar)
+                .setDefaultValue(true)
+                .setTooltip(Text.literal("Display top-center progress bar counting down to morning (client overrides server)"))
+                .setSaveConsumer(v -> apply(cfg, c -> c.enableProgressBar = v))
                 .build());
 
         ConfigCategory sound = builder.getOrCreateCategory(Text.literal("Phantom Sounds"));
@@ -169,6 +177,20 @@ public final class ClothConfigFactory {
         int len = s.length();
         if (len != 7 && len != 9) return fallback;
         for (int i = 1; i < len; i++) {
+            char c = s.charAt(i);
+            boolean hex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
+            if (!hex) return fallback;
+        }
+        return s;
+    }
+
+    // New: stricter validator for the Text Color field — only accept #RRGGBB
+    private static String validateTextColor(String in, String fallback) {
+        if (in == null) return fallback;
+        String s = in.trim().toUpperCase();
+        if (!s.startsWith("#")) return fallback;
+        if (s.length() != 7) return fallback;
+        for (int i = 1; i < 7; i++) {
             char c = s.charAt(i);
             boolean hex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
             if (!hex) return fallback;

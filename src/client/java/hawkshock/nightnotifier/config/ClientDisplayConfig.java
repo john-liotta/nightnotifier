@@ -12,10 +12,10 @@ import java.nio.file.Paths;
 
 /**
  * Client display configuration.
- * Added dimension visibility, offender display preference, and migration (version 8).
+ * Added dimension visibility, offender display preference, and migration (version 9).
  */
 public final class ClientDisplayConfig {
-    public int configVersion = 8;
+    public int configVersion = 9;
 
     public boolean enableNotifications = true;
     public boolean useClientStyle = true;
@@ -29,7 +29,7 @@ public final class ClientDisplayConfig {
     public float textScale = 1.7f; // clamped to [0.5, 2.5]
     public String textAlign = "CENTER";
 
-    // Default duration in ticks. Changed to 5s = 100 ticks.
+    // Default duration in ticks. 5s = 100 ticks.
     public int defaultDuration = 100;
 
     public float nightScreamVolume = 1.0f;
@@ -43,6 +43,9 @@ public final class ClientDisplayConfig {
     // New: preference for showing all offenders or only the top offender (authoritative mode only).
     // Client-only simulation always shows local player only regardless of this setting.
     public boolean showAllOffenders = true;
+
+    // New: client preference for showing the progress bar. Client choice trumps server setting.
+    public boolean enableProgressBar = true;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "nightnotifier_client.json");
@@ -71,6 +74,13 @@ public final class ClientDisplayConfig {
                 cfg.showAllOffenders = true;
             }
             cfg.configVersion = 8;
+        }
+        if (cfg.configVersion < 9) {
+            // Introduced enableProgressBar
+            if (!hasField(cfg, "enableProgressBar")) {
+                cfg.enableProgressBar = true;
+            }
+            cfg.configVersion = 9;
         }
         save(cfg);
         return cfg;
