@@ -184,7 +184,7 @@ public final class ClothConfigFactory {
         return s;
     }
 
-    // New: stricter validator for the Text Color field — only accept #RRGGBB
+    // New: stricter validator for the Text Color field - only accept #RRGGBB
     private static String validateTextColor(String in, String fallback) {
         if (in == null) return fallback;
         String s = in.trim().toUpperCase();
