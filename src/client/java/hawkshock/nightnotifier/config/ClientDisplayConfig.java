@@ -12,11 +12,10 @@ import java.nio.file.Paths;
 
 /**
  * Client display configuration.
- * Added dimension visibility (showNetherNotifications, showEndNotifications) and
- * migration for newly added fields (version 7).
+ * Added dimension visibility, offender display preference, and migration (version 8).
  */
 public final class ClientDisplayConfig {
-    public int configVersion = 7;
+    public int configVersion = 8;
 
     public boolean enableNotifications = true;
     public boolean useClientStyle = true;
@@ -30,16 +29,20 @@ public final class ClientDisplayConfig {
     public float textScale = 1.7f; // clamped to [0.5, 2.5]
     public String textAlign = "CENTER";
 
-    public int defaultDuration = 300;
+    // Default duration in ticks. Changed to 5s = 100 ticks.
+    public int defaultDuration = 100;
 
     public float nightScreamVolume = 1.0f;
     public float morningScreamVolume = 2.0f;
 
     public int morningWarningLeadTicks = 1200;
 
-    // New client-side dimension visibility toggles
     public boolean showNetherNotifications = false;
     public boolean showEndNotifications = false;
+
+    // New: preference for showing all offenders or only the top offender (authoritative mode only).
+    // Client-only simulation always shows local player only regardless of this setting.
+    public boolean showAllOffenders = true;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "nightnotifier_client.json");
@@ -60,11 +63,21 @@ public final class ClientDisplayConfig {
         if (cfg.configVersion < 7) {
             if (cfg.textScale < 0.5f) cfg.textScale = 0.5f;
             if (cfg.textScale > 2.5f) cfg.textScale = 2.5f;
-            // If fields missing in very old versions, they will have default false automatically
             cfg.configVersion = 7;
+        }
+        if (cfg.configVersion < 8) {
+            // Introduced showAllOffenders flag
+            if (!hasField(cfg, "showAllOffenders")) {
+                cfg.showAllOffenders = true;
+            }
+            cfg.configVersion = 8;
         }
         save(cfg);
         return cfg;
+    }
+
+    private static boolean hasField(Object o, String name) {
+        try { return o.getClass().getDeclaredField(name) != null; } catch (NoSuchFieldException e) { return false; }
     }
 
     public static void save(ClientDisplayConfig cfg) {

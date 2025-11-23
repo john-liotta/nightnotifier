@@ -32,7 +32,6 @@ public final class ClothConfigFactory {
 
     private static Screen buildClothScreen(Screen parent) {
         ClientDisplayConfig cfg = ClientDisplayConfig.load();
-        // Adjust clamps to new min (0.25) for scale and keep 0-3 for volumes
         cfg.textScale = clamp(cfg.textScale, 0.25f, 2.5f);
         cfg.nightScreamVolume = clamp(cfg.nightScreamVolume, 0f, 3f);
         cfg.morningScreamVolume = clamp(cfg.morningScreamVolume, 0f, 3f);
@@ -73,20 +72,24 @@ public final class ClothConfigFactory {
                 .setSaveConsumer(v -> apply(cfg, c -> c.showEndNotifications = v))
                 .build());
 
+        overlay.addEntry(eb.startBooleanToggle(Text.literal("Show All Offenders (Authoritative)"), cfg.showAllOffenders)
+                .setDefaultValue(true)
+                .setTooltip(Text.literal("When server sends multi-offender message, show everyone. Client-only mode always shows self."))
+                .setSaveConsumer(v -> apply(cfg, c -> c.showAllOffenders = v))
+                .build());
+
         overlay.addEntry(eb.startEnumSelector(Text.literal("Message Anchor"), Anchor.class, toAnchor(cfg.anchor))
                 .setDefaultValue(Anchor.TOP_CENTER)
                 .setTooltip(Text.literal("Screen anchor for the message overlay"))
                 .setSaveConsumer(a -> apply(cfg, c -> c.anchor = a.name()))
                 .build());
 
-        // Offset X
         overlay.addEntry(eb.startIntField(Text.literal("Message Offset X"), cfg.offsetX)
                 .setDefaultValue(0)
                 .setTooltip(Text.literal("Horizontal offset from anchor"))
                 .setSaveConsumer(v -> apply(cfg, c -> c.offsetX = v))
                 .build());
 
-        // Offset Y
         overlay.addEntry(eb.startIntField(Text.literal("Message Offset Y"), cfg.offsetY)
                 .setDefaultValue(80)
                 .setTooltip(Text.literal("Vertical offset from anchor"))
@@ -99,10 +102,9 @@ public final class ClothConfigFactory {
                 .setSaveConsumer(a -> apply(cfg, c -> c.textAlign = a.name()))
                 .build());
 
-        // Text Scale as percent slider (25% - 250% -> 0.25f - 2.5f)
         int scalePercent = clampInt(Math.round(cfg.textScale * 100f), 25, 250);
         overlay.addEntry(eb.startIntSlider(Text.literal("Text Scale"), scalePercent, 25, 250)
-                .setDefaultValue(170) // 1.7f -> 170%
+                .setDefaultValue(170)
                 .setTooltip(Text.literal("Text scale (25% - 250%)"))
                 .setSaveConsumer(p -> apply(cfg, c -> c.textScale = clamp(p / 100f, 0.25f, 2.5f)))
                 .build());
@@ -117,7 +119,7 @@ public final class ClothConfigFactory {
         int leadSeconds = cfg.morningWarningLeadTicks / 20;
         overlay.addEntry(eb.startIntField(Text.literal("Seconds Until Morning"), leadSeconds)
                 .setDefaultValue(60)
-                .setTooltip(Text.literal("How many seconds before sunrise to warn"))
+                .setTooltip(Text.literal("Seconds before sunrise to warn (client styling only)"))
                 .setSaveConsumer(sec -> apply(cfg, c -> c.morningWarningLeadTicks = Math.max(0, sec) * 20))
                 .build());
 
@@ -131,22 +133,20 @@ public final class ClothConfigFactory {
 
         sound.addEntry(eb.startBooleanToggle(Text.literal("Enable Phantom Screams"), cfg.enablePhantomScreams)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Play phantom sounds for night/morning warnings"))
+                .setTooltip(Text.literal("Play phantom sounds for night/morning warnings (authoritative only for actual events)"))
                 .setSaveConsumer(v -> apply(cfg, c -> c.enablePhantomScreams = v))
                 .build());
 
-        // Night Scream Volume as percent slider (0% - 300% -> 0.0f - 3.0f)
         int nightPercent = clampInt(Math.round(cfg.nightScreamVolume * 100f), 0, 300);
         sound.addEntry(eb.startIntSlider(Text.literal("Night Scream Volume"), nightPercent, 0, 300)
-                .setDefaultValue(100) // 1.0f -> 100%
+                .setDefaultValue(100)
                 .setTooltip(Text.literal("Nightfall volume (0% - 300%)"))
                 .setSaveConsumer(p -> apply(cfg, c -> c.nightScreamVolume = clamp(p / 100f, 0f, 3f)))
                 .build());
 
-        // Morning Scream Volume as percent slider (0% - 300% -> 0.0f - 3.0f)
         int morningPercent = clampInt(Math.round(cfg.morningScreamVolume * 100f), 0, 300);
         sound.addEntry(eb.startIntSlider(Text.literal("Morning Scream Volume"), morningPercent, 0, 300)
-                .setDefaultValue(200) // 2.0f -> 200%
+                .setDefaultValue(200)
                 .setTooltip(Text.literal("Morning volume (0% - 300%)"))
                 .setSaveConsumer(p -> apply(cfg, c -> c.morningScreamVolume = clamp(p / 100f, 0f, 3f)))
                 .build());
@@ -159,13 +159,8 @@ public final class ClothConfigFactory {
         NightNotifierClient.applyClientConfig(cfg);
     }
 
-    private static float clamp(float v, float min, float max) {
-        return Math.max(min, Math.min(max, v));
-    }
-
-    private static int clampInt(int v, int min, int max) {
-        return Math.max(min, Math.min(max, v));
-    }
+    private static float clamp(float v, float min, float max) { return Math.max(min, Math.min(max, v)); }
+    private static int clampInt(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
 
     private static String validateColor(String in, String fallback) {
         if (in == null) return fallback;
@@ -187,7 +182,5 @@ public final class ClothConfigFactory {
     private static Align toAlign(String s) {
         try { return Align.valueOf(sanitize(s)); } catch (Exception e) { return Align.CENTER; }
     }
-    private static String sanitize(String v) {
-        return v == null ? "" : v.trim().toUpperCase();
-    }
+    private static String sanitize(String v) { return v == null ? "" : v.trim().toUpperCase(); }
 }
