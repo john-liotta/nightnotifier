@@ -123,7 +123,21 @@ public class NightNotifier implements ModInitializer {
             LOGGER.info("Morning warning skipped: no players meet rest threshold (>= {}).", CONFIG.restThresholdTicks);
             return false;
         }
-        broadcast(world, "1 Minute Until Sunrise", offenders, "SUNRISE_IMMINENT");
+
+        // Use top offender to compute nights text
+        ServerPlayerEntity top = offenders.get(0);
+        int ticks = top.getStatHandler().getStat(Stats.CUSTOM.getOrCreateStat(Stats.TIME_SINCE_REST));
+        int nights = ticks / TICKS_PER_DAY;
+        String nightsText = nights == 1 ? "1 night" : nights + " nights";
+
+        // Compute current seconds until actual sunrise and use that in the label
+        long dayTime = world.getTimeOfDay() % 24000L;
+        long remainingTicks = NIGHT_END - dayTime;
+        if (remainingTicks < 0) remainingTicks += 24000L;
+        int seconds = Math.max(0, (int) Math.ceil((double) remainingTicks / 20.0));
+        String label = seconds + "s Until Sunrise";
+
+        broadcast(world, label, offenders, "SUNRISE_IMMINENT");
         return true;
     }
 

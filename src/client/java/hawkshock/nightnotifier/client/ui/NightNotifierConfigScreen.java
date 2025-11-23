@@ -133,6 +133,18 @@ public class NightNotifierConfigScreen extends Screen {
 		}));
 		yLeft += 24;
 
+		CyclingButtonWidget<Boolean> offendersToggle = CyclingButtonWidget.onOffBuilder(cfg.showAllOffenders)
+				.build(left, yLeft, w, h, Text.literal("Show All Offenders"),
+						(b, v) -> { cfg.showAllOffenders = v; dirty = true; liveApplyToggles(); });
+		offendersToggle.setTooltip(Tooltip.of(Text.literal("Show multi-offender list (server authoritative only)")));
+		addDrawableChild(offendersToggle);
+		addDrawableChild(resetButton(left + w + 4, yLeft, () -> {
+			cfg.showAllOffenders = defaults.showAllOffenders;
+			offendersToggle.setValue(cfg.showAllOffenders);
+			liveApplyToggles();
+		}));
+		yLeft += 24;
+
 		scaleSlider = new ScaleSlider(left, yLeft, w, h, scaleNorm);
 		addDrawableChild(scaleSlider);
 		addDrawableChild(resetButton(left + w + 4, yLeft, () -> {
@@ -232,6 +244,7 @@ public class NightNotifierConfigScreen extends Screen {
 		cfg.enablePhantomScreams = phantomEnabled;
 		cfg.showNetherNotifications = netherEnabled;
 		cfg.showEndNotifications = endEnabled;
+		cfg.showAllOffenders = cfg.showAllOffenders;
 		ClientDisplayConfig.save(cfg);
 		NightNotifierClient.applyClientConfig(cfg);
 	}
