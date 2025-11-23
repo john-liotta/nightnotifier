@@ -1,6 +1,6 @@
 package hawkshock.nightnotifier.client.config;
 
-import hawkshock.nightnotifier.config.ClientDisplayConfig;
+import hawkshock.shared.config.ClientDisplayConfig;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
