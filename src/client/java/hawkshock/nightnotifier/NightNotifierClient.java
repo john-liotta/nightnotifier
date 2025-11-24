@@ -25,6 +25,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 
+// Keep IconRender import (used for sun/moon icons)
+import hawkshock.nightnotifier.client.ui.IconRender;
+
 public class NightNotifierClient implements ClientModInitializer {
 
     private static final Logger LOG = LoggerFactory.getLogger("NightNotifierClient");
@@ -53,6 +56,14 @@ public class NightNotifierClient implements ClientModInitializer {
             sunriseWarned = false;
             prevCanSleep = false;
             ClientHandshake.sendInitial();
+
+            // DEBUG: probe for vanilla sun asset on join (prints to console)
+            try {
+                boolean found = IconRender.debugBuiltinSunPresent();
+                LOG.info("[NightNotifier] debug: builtin sun present = {}", found);
+            } catch (Throwable t) {
+                LOG.warn("[NightNotifier] debug: error checking builtin sun asset", t);
+            }
         });
 
         ClientPlayNetworking.registerGlobalReceiver(OverlayMessagePayload.ID, (payload, context) ->
@@ -107,7 +118,7 @@ public class NightNotifierClient implements ClientModInitializer {
                 sunriseWarned = false;
             }
 
-            if (naturalNight && !thundering && canSleepNow
+            if (naturalNight && nothreading(client, thundering) && canSleepNow
                     && lead > 0
                     && dayTime >= warningStartTick && dayTime < NIGHT_END
                     && !sunriseWarned) {
@@ -125,6 +136,13 @@ public class NightNotifierClient implements ClientModInitializer {
             OverlayManager.tick();
             prevCanSleep = canSleepNow;
         });
+    }
+
+    // small helper extracted to avoid repeated negation in the condition above
+    // Accept the actual parameter type used in the tick callback (MinecraftClient)
+    private static boolean nothreading(MinecraftClient client, boolean thundering) {
+        // placeholder to align with existing logic structure; actual condition uses the 'thundering' boolean
+        return !thundering;
     }
 
     // Keep a small delegator so other code can still call renderProgressBar if needed.

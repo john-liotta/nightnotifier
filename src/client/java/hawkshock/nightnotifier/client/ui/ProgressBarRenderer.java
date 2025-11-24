@@ -71,5 +71,41 @@ public final class ProgressBarRenderer {
         ctx.fill(x, y + barH, x + barW, y + barH + 1, 0xFF000000);
         ctx.fill(x - 1, y - 1, x, y + barH + 1, 0xFF000000);
         ctx.fill(x + barW, y - 1, x + barW + 1, y + barH + 1, 0xFF000000);
+
+        // --- Icon positioning integration ---
+        boolean showMoon = naturalNight && remainingTicks > clientLead;
+        boolean showSun = naturalNight && remainingTicks <= clientLead;
+
+        IconRender.set(showSun, showMoon, (int) Math.max(0, Math.min(remainingTicks, 1200L)));
+        IconRender.tick();
+
+        // Compute icon size and position. Place icon to the right of the bar and vertically center with the bar.
+        int baseIcon = Math.max(8, Math.round(12 * cfg.textScale));
+        // Scale down by ~25%
+        int iconSize = Math.max(8, Math.round(baseIcon * 0.75f));
+        // Cap iconSize so it can't be huge and push off-screen
+        iconSize = Math.min(iconSize, 64);
+
+        int spacing = 6;
+        // Small extra horizontal offset to nudge the icon right
+        int extraRight = Math.max(2, Math.round(iconSize * 0.2f));
+        int iconX = x + barW + spacing + extraRight; // place to the right of the bar, nudged right
+        int iconY = y + (barH - iconSize) / 2; // vertically center wrt bar
+
+        // If there's not enough room on the right, try the left side of the bar (also apply nudge)
+        if (iconX + iconSize + 4 > sw) {
+            iconX = x - iconSize - spacing - extraRight;
+        }
+
+        // Ensure icon fully visible vertically
+        int sh = mc.getWindow().getScaledHeight();
+        if (iconY < 4) iconY = 4;
+        if (iconY + iconSize + 4 > sh) iconY = Math.max(4, sh - iconSize - 4);
+
+        // Ensure icon fully visible horizontally as a last resort
+        if (iconX < 4) iconX = 4;
+        if (iconX + iconSize + 4 > sw) iconX = sw - iconSize - 4;
+
+        IconRender.renderAt(ctx, cfg, iconX, iconY, iconSize);
     }
 }
