@@ -1,128 +1,64 @@
 package hawkshock.nightnotifier.client.ui;
 
 import hawkshock.shared.config.ClientDisplayConfig;
-import java.io.IOException;
-import java.io.InputStream;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.resource.Resource;
-import net.minecraft.resource.ResourceManager;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.util.Identifier;
 
-/**
- * Skeleton renderer for sun / moon icons shown near the overlay.
- * Keep this class static-style like other render helpers in the project.
- *
- * This file provides a conservative `renderAt` routine that draws simple
- * colored quads as placeholders for the sun/moon. Debug border removed.
- */
 @Environment(EnvType.CLIENT)
 public final class IconRender {
     private IconRender() {}
 
-    // Example texture identifiers - left in place for later
-    private static final Identifier SUN_ID  = Identifier.of("nightnotifier", "textures/icon/sun.png");
-    private static final Identifier MOON_ID = Identifier.of("nightnotifier", "textures/icon/moon.png");
+    // Use the vanilla sky sun texture (the full atlas). We'll crop the 16x16 sun disc from it.
+    private static final Identifier SUN_TEX  = Identifier.of("minecraft", "textures/environment/sun.png");
+    private static final Identifier MOON_TEX = Identifier.of("minecraft", "textures/environment/moon_phases.png");
 
-    private static boolean showSun = false;
-    private static boolean showMoon = false;
-    private static int ticksRemaining = 0;
+    // Render the vanilla sun by sampling the 16x16 sun disc centered inside the 32x32 sun atlas.
+    public static void renderSun(DrawContext ctx, ClientDisplayConfig cfg, int x, int y, int size) {
+        final int texW = 32;     // full sun.png atlas width (you reported 32×32)
+        final int texH = 32;     // full sun.png atlas height
+        final int region = 16;   // actual sun disc region size
+        final int srcX = (texW - region) / 2; // center -> (8)
+        final int srcY = (texH - region) / 2; // center -> (8)
 
-    private static float alpha = 1.0f;
-    private static boolean pulseDown = true;
-
-    public static void set(boolean sun, boolean moon, int durationTicks) {
-        showSun = sun;
-        showMoon = moon;
-        ticksRemaining = Math.max(0, durationTicks);
-        alpha = 1.0f;
-        pulseDown = true;
+        // Draw the 16x16 sun disc (pixel-perfect crop) into the destination rectangle.
+        ctx.drawTexture(
+                RenderPipelines.GUI_TEXTURED,
+                SUN_TEX,
+                x, y,
+                (float) srcX, (float) srcY,
+                region, region,
+                texW, texH
+        );
     }
 
-    public static void tick() {
-        if (ticksRemaining > 0) ticksRemaining--;
-        if (ticksRemaining > 0) {
-            if (pulseDown) {
-                alpha -= 0.02f;
-                if (alpha <= 0.6f) pulseDown = false;
-            } else {
-                alpha += 0.02f;
-                if (alpha >= 1.0f) pulseDown = true;
-            }
-            alpha = Math.max(0.0f, Math.min(1.0f, alpha));
-        } else {
-            showSun = false;
-            showMoon = false;
-            alpha = 1.0f;
-            pulseDown = true;
-        }
+    // Backwards-compatible convenience for existing callers that expect a single-icon draw.
+    public static void renderSingle(DrawContext ctx, ClientDisplayConfig cfg, int x, int y, int size) {
+        renderSun(ctx, cfg, x, y, size);
     }
 
-    /**
-     * Conservative drawing helper that renders the icons at the provided location and size.
-     * Debug border removed so final visuals are clean.
-     */
-    public static void renderAt(DrawContext ctx, ClientDisplayConfig cfg, int topLeftX, int topLeftY, int iconSize) {
-        if (cfg == null) cfg = ClientDisplayConfig.load();
-        if (!cfg.enableNotifications) return;
-        if (!showSun && !showMoon) return;
-
+    // Render the moon frame at native 16x16 size from the 128x16 moon sheet.
+    public static void renderMoon(DrawContext ctx, ClientDisplayConfig cfg, int x, int y, int size) {
+        int phase = 0;
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.getWindow() == null) return;
-
-        // clamp coords defensively
-        int sw = mc.getWindow().getScaledWidth();
-        int sh = mc.getWindow().getScaledHeight();
-        int drawX = Math.max(0, Math.min(topLeftX, sw - iconSize));
-        int drawY = Math.max(0, Math.min(topLeftY, sh - iconSize));
-
-        int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
-        int sunColor = (a << 24) | 0xFFFFCC00;  // warm yellow/orange
-        int moonColor = (a << 24) | 0xFFCFE6FF; // pale bluish
-
-        int spacing = 4;
-
-        if (showSun) {
-            ctx.fill(drawX, drawY, drawX + iconSize, drawY + iconSize, sunColor);
-            drawX += iconSize + spacing;
-        }
-
-        if (showMoon) {
-            ctx.fill(drawX, drawY, drawX + iconSize, drawY + iconSize, moonColor);
-        }
-    }
-
-    public static boolean isVisible() {
-        return showSun || showMoon;
-    }
-
-    // debug probe for builtin sun (unchanged)
-    public static boolean debugBuiltinSunPresent() {
-        Identifier sunId = Identifier.of("minecraft", "textures/environment/sun.png");
-        ResourceManager rm = MinecraftClient.getInstance().getResourceManager();
-        try {
-            java.util.Optional<Resource> opt = rm.getResource(sunId);
-            if (opt.isEmpty()) {
-                System.out.println("[NightNotifier] debug: builtin sun MISSING -> " + sunId);
-                return false;
-            }
-            Resource r = opt.get();
-            InputStream is = null;
+        if (mc != null && mc.world != null) {
             try {
-                is = r.getInputStream();
-                boolean ok = is != null;
-                System.out.println("[NightNotifier] debug: builtin sun " + (ok ? "FOUND" : "MISSING") + " -> " + sunId);
-                return ok;
-            } finally {
-                if (is != null) {
-                    try { is.close(); } catch (IOException ignored) {}
-                }
-            }
-        } catch (IOException e) {
-            System.out.println("[NightNotifier] debug: builtin sun MISSING: " + e.getMessage());
-            return false;
+                phase = mc.world.getMoonPhase();
+            } catch (Throwable ignored) {}
         }
+
+        int srcX = (phase % 8) * 16;
+
+        ctx.drawTexture(
+                RenderPipelines.GUI_TEXTURED,
+                MOON_TEX,
+                x, y,
+                (float) srcX, 0f,
+                16, 16,
+                128, 16
+        );
     }
 }
