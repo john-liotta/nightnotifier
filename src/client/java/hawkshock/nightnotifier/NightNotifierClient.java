@@ -14,25 +14,24 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.stat.Stats;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+// Keep IconRender import (used for sun/moon icons)
+import hawkshock.nightnotifier.client.ui.IconRender;
+import hawkshock.nightnotifier.client.ClientProbe;
+
 import java.time.Instant;
 
 public class NightNotifierClient implements ClientModInitializer {
 
     private static final Logger LOG = LoggerFactory.getLogger("NightNotifierClient");
+    private static boolean PROBE_PRINTED = false;
 
     private static ClientDisplayConfig CONFIG;
     private static Instant lastConfigTimestamp = Instant.EPOCH;
 
-    // Simulation state
     private static boolean prevCanSleep = false;
     private static boolean sunriseWarned = false;
 
@@ -45,6 +44,10 @@ public class NightNotifierClient implements ClientModInitializer {
         LOG.info("[NightNotifier] Client init");
         CONFIG = ClientDisplayConfig.load();
         lastConfigTimestamp = ConfigWatcher.getConfigFileTimestamp();
+
+        // ONE-TIME PROBE: prints DrawContext.drawTexture signatures to the run console.
+        // Remove or comment out this line after you paste the printed signatures here.
+        ClientProbe.printDrawContextSignatures();
 
         OverlayMessagePayload.registerTypeSafely();
         ClientHandshake.register();
@@ -60,18 +63,14 @@ public class NightNotifierClient implements ClientModInitializer {
                     LOG.debug("[NightNotifier] Received overlay payload: type={}, duration={}, msg={}",
                             payload.eventType(), payload.duration(), payload.message());
                     if ("SUNRISE_IMMINENT".equals(payload.eventType())) {
-                        int clientLead = CONFIG.morningWarningLeadTicks; // ticks
+                        int clientLead = CONFIG.morningWarningLeadTicks; 
                         int serverLead = ClientHandshake.serverMorningLeadTicks >= 0 ? ClientHandshake.serverMorningLeadTicks : 1200;
                         if (clientLead != serverLead) {
-                            LOG.debug("[NightNotifier] Ignoring server sunrise overlay (serverLead={} ticks != clientLead={} ticks)", serverLead, clientLead);
-
-                            // Still play the phantom "warn" sound for modded client even when ignoring overlay,
-                            // because server sound fallback only reaches unmodded clients.
+                            LOG.debug("[NightNotifier] Ignoring server sunrise overlay (serverLead={} != clientLead={})", serverLead, clientLead);
                             if (CONFIG.enablePhantomScreams) {
                                 MinecraftClient mc = MinecraftClient.getInstance();
                                 OverlayManager.playSoundForEvent("SUNRISE_IMMINENT", mc, CONFIG);
                             }
-
                             return;
                         }
                     }
@@ -80,18 +79,19 @@ public class NightNotifierClient implements ClientModInitializer {
         );
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
-            lastConfigTimestamp = ConfigWatcher.checkAndReload(lastConfigTimestamp, NightNotifierClient::applyClientConfig);
-            ProgressBarRenderer.render(drawContext, CONFIG);
-            OverlayManager.render(drawContext);
-        });
+            if (!PROBE_PRINTED) {
+                ClientProbe.printDrawContextSignatures(); // one-time, on render thread
+                PROBE_PRINTED = true;
+            }
+             lastConfigTimestamp = ConfigWatcher.checkAndReload(lastConfigTimestamp, NightNotifierClient::applyClientConfig);
+             ProgressBarRenderer.render(drawContext, CONFIG);
+             OverlayManager.render(drawContext);
+         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.world == null || client.player == null) return;
             boolean serverLeadKnown = ClientHandshake.serverMorningLeadTicks >= 0;
-            if (ClientHandshake.authoritative && serverLeadKnown && ClientHandshake.serverMorningLeadTicks == CONFIG.morningWarningLeadTicks) {
-                return;
-            }
-
+            if (ClientHandshake.authoritative && serverLeadKnown && ClientHandshake.serverMorningLeadTicks == CONFIG.morningWarningLeadTicks) return;
             if (client.world.getRegistryKey() != World.OVERWORLD) return;
 
             long dayTime = client.world.getTimeOfDay() % 24000L;
@@ -107,9 +107,8 @@ public class NightNotifierClient implements ClientModInitializer {
                 sunriseWarned = false;
             }
 
-            if (naturalNight && !thundering && canSleepNow
-                    && lead > 0
-                    && dayTime >= warningStartTick && dayTime < NIGHT_END
+            if (naturalNight && nothreading(client, thundering) && canSleepNow
+                    && lead > 0 && dayTime >= warningStartTick && dayTime < NIGHT_END
                     && !sunriseWarned) {
                 long remainingTicks = NIGHT_END - dayTime;
                 if (remainingTicks < 0) remainingTicks += 24000L;
@@ -118,16 +117,17 @@ public class NightNotifierClient implements ClientModInitializer {
                 sunriseWarned = true;
             }
 
-            if (!canSleepNow && prevCanSleep) {
-                sunriseWarned = false;
-            }
+            if (!canSleepNow && prevCanSleep) sunriseWarned = false;
 
             OverlayManager.tick();
             prevCanSleep = canSleepNow;
         });
     }
 
-    // Keep a small delegator so other code can still call renderProgressBar if needed.
+    private static boolean nothreading(MinecraftClient client, boolean thundering) {
+        return !thundering;
+    }
+
     private static void renderProgressBar(DrawContext ctx) {
         ProgressBarRenderer.render(ctx, CONFIG);
     }
@@ -162,22 +162,12 @@ public class NightNotifierClient implements ClientModInitializer {
 
     public static void applyClientConfig(ClientDisplayConfig updated) {
         CONFIG = updated;
-        lastConfigTimestamp = Instant.now();
         OverlayManager.applyCurrentStyle(CONFIG);
-        if (!CONFIG.enableNotifications) {
-            // clear overlay state on disable
-            OverlayManager.set("", 0, null, CONFIG);
-        }
+        if (!CONFIG.enableNotifications) OverlayManager.set("", 0, null, CONFIG);
     }
 
     public static void reloadConfig() {
         CONFIG = ClientDisplayConfig.load();
-        lastConfigTimestamp = ConfigWatcher.getConfigFileTimestamp();
         OverlayManager.applyCurrentStyle(CONFIG);
-    }
-
-    // Remaining config watcher moved into ConfigWatcher; keep helper to trigger periodic checks from the HUD loop
-    private static void checkExternalConfigModification() {
-        lastConfigTimestamp = ConfigWatcher.checkAndReload(lastConfigTimestamp, NightNotifierClient::applyClientConfig);
     }
 }
